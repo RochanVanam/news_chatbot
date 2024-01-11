@@ -1,22 +1,27 @@
-from flask import Flask, render_template, request
-from transformers import pipeline
+from transformers import pipeline, PegasusForConditionalGeneration, PegasusTokenizer
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 from concurrent.futures import ThreadPoolExecutor
 from bs4 import BeautifulSoup
 from urllib.parse import quote
 import torch
 import requests
-import tkinter as tk
 import time
 import re
 
-class FinancialChatbot:
+progress = 0
+
+class Chatbot:
     def __init__(self):
-        self.summarizer = pipeline('summarization', model="google/pegasus-xsum")
+        # self.summarizer = pipeline('summarization', model="google/pegasus-xsum") # This program dynamically loads model, so this line is not needed
+        pass
+
+    def __load_model(self):
+        # Load Google Pegasus LLM
+        model_name = "google/pegasus-xsum"
+        model = PegasusForConditionalGeneration.from_pretrained(model_name)
+        tokenizer = PegasusTokenizer.from_pretrained(model_name)
+        return pipeline('summarization', model=model, tokenizer=tokenizer)
 
     def __get_article_content(self, url):
         chrome_options = Options()
@@ -59,29 +64,19 @@ class FinancialChatbot:
         urls = [result.find("a", href=True).get('href') for result in results]
         return urls[:pages]
     
-        # urls = []
-
-        # for result in results:
-        #     url = result.find("a", href=True).get('href')
-
-        #     if url:
-        #         print(f"URL found: {url}")
-        #     else:
-        #         print("URL not found")
-
-        #     urls.append(url)
-        #     if len(urls) >= pages:
-        #         break
-        # return urls
-    
     def __generate_summary(self, content):
+        global progress
+
         max_chunk_size = 1024
         generated_summaries = []
 
         chunks = [content[i:i+max_chunk_size] for i in range(0, len(content), max_chunk_size)]
 
+        summarizer = self.__load_model()
+        progress += 10
+
         for chunk in chunks:
-            summary = self.summarizer(
+            summary = summarizer(
                 chunk,
                 max_length=50,
                 min_length=15,
@@ -93,13 +88,20 @@ class FinancialChatbot:
             )
             generated_summaries.append(summary[0]['summary_text'])
 
+        progress += 30
+
         final_summary = " ".join(generated_summaries)
         return final_summary
     
-    def search_cnn(self, query, pages=3):
+    def generate_output(self, query, pages=3):
+        global progress
+        progress = 0
+
         base_url = "https://www.cnn.com/search?q="
         formatted_query = quote(query)
         url = f"{base_url}{formatted_query}&from=0&size=10&page=1&sort=newest&types=article&section=business"
+
+        progress += 10
 
         chrome_options = Options()
         chrome_options.add_argument("--headless")
@@ -115,6 +117,8 @@ class FinancialChatbot:
 
             search_urls = self.__get_search_urls(soup, pages)
 
+            progress += 10
+
             if len(search_urls) > 0:
                 print(f"{len(search_urls)} URLs found")
             else:
@@ -124,8 +128,12 @@ class FinancialChatbot:
                 content_list = list(executor.map(self.__get_article_content, search_urls))
             content = ' '.join(content_list)
 
+            progress += 30
+
             processed_content = content.replace("\n", " ").replace("  ", " ")
             processed_content = re.sub(r'\s+', ' ', processed_content).strip()
+
+            progress += 10
 
             print("ARTICLE CONTENT")
             print(processed_content)
@@ -136,18 +144,6 @@ class FinancialChatbot:
         except Exception as e:
             print(f"Error: {e}")
         return []
-
-def main():
-    chatbot = FinancialChatbot()
-    query = "Roth 401k"
-    # query = "Real estate news"
-    # query = "What is the equities market outlook for 2024?"
-
-    output = chatbot.search_cnn(query)
-    print()
-    print("CHATBOT RESPONSE")
-    print(output)
-
-if __name__ == "__main__":
-    chatbot = FinancialChatbot()
-    main()
+    
+def get_progress():
+    return progress
