@@ -18,7 +18,7 @@ Clone the repository to your local machine using ```git clone https://github.com
 6. Open browser and go to the web address printed in CLI
 7. Enter query. It might take a minute to get a response.
 
-# CNN
+#### CNN
 In ```other_versions/```, there is a program called ```cnn.py``` that scrapes CNN instead of CNBC.
 1. To scrape CNN, move ```cnn.py``` into the main project directory.
 2. Go to app.py and edit the import statement at the top from ```from main import Chatbot, get_progress``` to ```from cnn import Chatbot, get_progress```.
